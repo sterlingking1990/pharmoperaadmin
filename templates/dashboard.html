@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pharmacy Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,.08);
+        }
+        .card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            height: 100%;
+        }
+        .kpi-card .card-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .kpi-value {
+            font-size: 2.5rem;
+            font-weight: 600;
+        }
+        .kpi-label {
+            font-size: 1rem;
+            color: #6c757d;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        #main-dashboard {
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#" style="font-weight: 600;">PharmOpera Admin</a>
+            <div class="d-flex align-items-center">
+                <span class="navbar-text me-3">
+                    <small>Logged in as:</small> <strong>{{ phone_no }}</strong>
+                </span>
+                <span class="navbar-text me-3">
+                    <small>Last Updated:</small> <strong id="last-updated">Never</strong>
+                </span>
+                <a href="/logout" class="btn btn-outline-danger">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid p-4">
+        <div id="no-data-message" class="alert alert-warning text-center" style="display: none;">
+            <h3>No Data Available</h3>
+            <p>There is currently no reminder data available for your pharmacy. The dashboard will update automatically when new data arrives.</p>
+        </div>
+
+        <div id="main-dashboard">
+            <!-- KPI Cards -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-3 col-md-6">
+                    <div class="card kpi-card bg-primary text-white">
+                        <div class="card-body">
+                            <div id="kpi-total-patients" class="kpi-value">0</div>
+                            <div class="kpi-label">Total Patients</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card kpi-card bg-success text-white">
+                        <div class="card-body">
+                            <div class="kpi-value"><span id="kpi-adherence-rate">0.0</span>%</div>
+                            <div class="kpi-label">Adherence Rate</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card kpi-card bg-info text-white">
+                        <div class="card-body">
+                            <div id="kpi-reminders-sent" class="kpi-value">0</div>
+                            <div class="kpi-label">Reminders Sent</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="card kpi-card bg-warning text-dark">
+                        <div class="card-body">
+                            <div id="kpi-pending-reminders" class="kpi-value">0</div>
+                            <div class="kpi-label">Pending Reminders</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Adherence Trend (%)</h5>
+                            <div class="chart-container"><canvas id="adherenceTrendChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Reminder Status</h5>
+                            <div class="chart-container"><canvas id="reminderStatusChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-4 mb-4">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Top 5 Medications</h5>
+                            <div class="chart-container"><canvas id="topMedicationsChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                 <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Top 5 Dosages</h5>
+                            <div class="chart-container"><canvas id="dosageDistributionChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div class="row g-4 mb-4">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Reminders by Time of Day</h5>
+                            <div class="chart-container"><canvas id="remindersByTimeChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Upcoming vs. Completed</h5>
+                            <div class="chart-container"><canvas id="upcomingVsCompletedChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Patients Needing Check-In</h5>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Patient ID</th>
+                                            <th>Medication</th>
+                                            <th>Status</th>
+                                            <th>Check-in Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="check-in-table-body">
+                                        <!-- Rows will be inserted here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Chart.js Global Configuration ---
+        Chart.defaults.font.family = "'Poppins', sans-serif";
+        Chart.defaults.responsive = true;
+        Chart.defaults.maintainAspectRatio = false;
+
+        const initialDashboardData = {{ dashboard_data | safe }};
+        window.charts = {}; // Global object to hold chart instances
+
+        // --- Chart Creation and Update Functions ---
+        function createOrUpdateChart(chartId, config) {
+            const ctx = document.getElementById(chartId).getContext('2d');
+            if (window.charts[chartId]) {
+                window.charts[chartId].data = config.data;
+                window.charts[chartId].update();
+            } else {
+                window.charts[chartId] = new Chart(ctx, config);
+            }
+        }
+        
+        function updateAdherenceTrend(data) {
+            createOrUpdateChart('adherenceTrendChart', {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Adherence Rate',
+                        data: data.data,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                }
+            });
+        }
+        
+        function updateReminderStatus(data) {
+            createOrUpdateChart('reminderStatusChart', {
+                type: 'pie',
+                data: {
+                    labels: data.labels,
+                    datasets: [{ data: data.data, backgroundColor: ['#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6c757d'] }]
+                },
+                options: { plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function updateTopMedications(data) {
+             createOrUpdateChart('topMedicationsChart', {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{ label: 'Count', data: data.data, backgroundColor: '#17a2b8' }]
+                },
+                options: { indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+        }
+
+        function updateDosageDistribution(data) {
+             createOrUpdateChart('dosageDistributionChart', {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{ label: 'Count', data: data.data, backgroundColor: '#6f42c1' }]
+                },
+                options: { indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+        }
+
+        function updateRemindersByTime(data) {
+            createOrUpdateChart('remindersByTimeChart', {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{ label: 'Reminders', data: data.data, backgroundColor: ['#fd7e14', '#ffc107', '#0d6efd', '#6c757d'] }]
+                },
+                 options: { plugins: { legend: { display: false } } }
+            });
+        }
+
+        function updateUpcomingVsCompleted(data) {
+            createOrUpdateChart('upcomingVsCompletedChart', {
+                type: 'doughnut',
+                data: {
+                    labels: data.labels,
+                    datasets: [{ data: data.data, backgroundColor: ['#ffc107', '#28a745'] }]
+                },
+                options: { plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function updateCheckInTable(data) {
+            const tableBody = document.getElementById('check-in-table-body');
+            tableBody.innerHTML = ''; // Clear existing rows
+            if (data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No patients currently need a check-in.</td></tr>';
+                return;
+            }
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.patient_identifier}</td>
+                    <td>${row.medication_name}</td>
+                    <td><span class="badge bg-warning text-dark">${row.status}</span></td>
+                    <td>${row.check_in_message || 'N/A'}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // --- Main Dashboard Update Function ---
+        function updateDashboard(data) {
+            // Check if data is empty
+            if (Object.keys(data).length === 0) {
+                document.getElementById('no-data-message').style.display = 'block';
+                document.getElementById('main-dashboard').style.visibility = 'hidden';
+                return;
+            }
+            
+            document.getElementById('no-data-message').style.display = 'none';
+            document.getElementById('main-dashboard').style.visibility = 'visible';
+
+            // KPI Cards
+            document.getElementById('kpi-total-patients').innerText = data.kpi_cards.total_patients;
+            document.getElementById('kpi-adherence-rate').innerText = data.kpi_cards.adherence_rate;
+            document.getElementById('kpi-reminders-sent').innerText = data.kpi_cards.reminders_sent;
+            document.getElementById('kpi-pending-reminders').innerText = data.kpi_cards.pending_reminders;
+
+            // Charts
+            if(data.adherence_trend) updateAdherenceTrend(data.adherence_trend);
+            if(data.reminder_status) updateReminderStatus(data.reminder_status);
+            if(data.top_medications) updateTopMedications(data.top_medications);
+            if(data.dosage_distribution) updateDosageDistribution(data.dosage_distribution);
+            if(data.reminders_by_time) updateRemindersByTime(data.reminders_by_time);
+            if(data.upcoming_vs_completed) updateUpcomingVsCompleted(data.upcoming_vs_completed);
+            
+            // Table
+            if(data.check_in_table) updateCheckInTable(data.check_in_table);
+
+            // Last Updated
+            document.getElementById('last-updated').innerText = new Date().toLocaleTimeString();
+        }
+
+        // --- Initial Load & Socket.IO Connection ---
+        updateDashboard(initialDashboardData);
+
+        const socket = io();
+        socket.on('connect', () => console.log('Connected to real-time server.'));
+        socket.on('update_data', (msg) => {
+            console.log('Received real-time data update.');
+            const newData = JSON.parse(msg.data);
+            updateDashboard(newData);
+        });
+        socket.on('disconnect', () => console.log('Disconnected from real-time server.'));
+
+    </script>
+</body>
+</html>

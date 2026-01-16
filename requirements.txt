@@ -1,0 +1,7 @@
+Flask
+Flask-SocketIO
+gspread
+pandas
+oauth2client
+gevent
+gevent-websocket

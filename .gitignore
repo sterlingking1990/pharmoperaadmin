@@ -1,0 +1,15 @@
+# Sensitive credentials
+credentials.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+.venv
+venv/
+env/
+
+# Local data files
+*.csv
