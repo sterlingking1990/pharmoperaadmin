@@ -427,6 +427,31 @@ def get_details():
             print(f"Error in adherence_rate: {e}")
             details_df = pd.DataFrame([{'Error': str(e)}])
 
+    elif metric == 'reminders_sent':
+        try:
+            patient_reminders = []
+            
+            for patient_id in pharmacy_df['patient_identifier'].unique():
+                patient_data = pharmacy_df[pharmacy_df['patient_identifier'] == patient_id]
+                
+                total_reminders = len(patient_data)
+                latest_status = patient_data.iloc[-1]['status'] if len(patient_data) > 0 else 'N/A'
+                frequency = patient_data.iloc[0]['frequency'] if len(patient_data) > 0 else 'N/A'
+                last_reminder = pd.to_datetime(patient_data['time_stamp']).max().strftime('%Y-%m-%d %H:%M') if len(patient_data) > 0 else 'N/A'
+                
+                patient_reminders.append({
+                    'Patient Name': patient_id,
+                    'Total Reminders': total_reminders,
+                    'Latest Status': latest_status,
+                    'Frequency': frequency,
+                    'Last Reminder': last_reminder
+                })
+            
+            details_df = pd.DataFrame(patient_reminders).sort_values('Total Reminders', ascending=False)
+        except Exception as e:
+            print(f"Error in reminders_sent: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
     # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...

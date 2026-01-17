@@ -32,6 +32,13 @@ class KPICards {
                 window.detailsModal.show('adherence_rate', 'Adherence Rate - Patient Breakdown');
             }
         });
+
+        // Add click listener for the reminders sent card
+        document.getElementById('reminders-sent-card').addEventListener('click', () => {
+            if (window.detailsModal) {
+                window.detailsModal.show('reminders_sent', 'Reminders Sent - Patient Activity');
+            }
+        });
     }
 }
 
