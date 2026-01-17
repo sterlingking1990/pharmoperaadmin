@@ -13,3 +13,4 @@ env/
 
 # Local data files
 *.csv
+fly.toml
