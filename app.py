@@ -542,6 +542,52 @@ def get_details():
             print(f"Error in time details: {e}")
             details_df = pd.DataFrame([{'Error': str(e)}])
 
+    elif metric.startswith('completion_'):
+        try:
+            completion_type = metric.replace('completion_', '')
+            now = pd.Timestamp.now()
+            
+            if completion_type.lower() == 'upcoming':
+                # Show pending/upcoming reminders
+                upcoming_data = pharmacy_df[pharmacy_df['status'].isin(['pending', 'upcoming'])]
+                
+                completion_details = []
+                for _, row in upcoming_data.iterrows():
+                    due_time = pd.to_datetime(row['next_reminder_time'], errors='coerce')
+                    days_until = (due_time - now).days if pd.notna(due_time) else 0
+                    
+                    completion_details.append({
+                        'Patient Name': row['patient_identifier'],
+                        'Medication': row['medication_name'],
+                        'Due Time': due_time.strftime('%Y-%m-%d %H:%M') if pd.notna(due_time) else 'N/A',
+                        'Days Until Due': max(0, days_until),
+                        'Frequency': row['frequency']
+                    })
+                
+                details_df = pd.DataFrame(completion_details).sort_values('Days Until Due')
+                
+            elif completion_type.lower() == 'completed':
+                # Show completed reminders
+                completed_data = pharmacy_df[pharmacy_df['status'] == 'completed']
+                
+                completion_details = []
+                for _, row in completed_data.iterrows():
+                    completion_time = pd.to_datetime(row['time_stamp'], errors='coerce')
+                    
+                    completion_details.append({
+                        'Patient Name': row['patient_identifier'],
+                        'Medication': row['medication_name'],
+                        'Completion Time': completion_time.strftime('%Y-%m-%d %H:%M') if pd.notna(completion_time) else 'N/A',
+                        'Frequency': row['frequency'],
+                        'Phone Number': row['phone_number']
+                    })
+                
+                details_df = pd.DataFrame(completion_details).sort_values('Completion Time', ascending=False)
+                
+        except Exception as e:
+            print(f"Error in completion details: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
     # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...

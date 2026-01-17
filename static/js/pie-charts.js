@@ -65,7 +65,16 @@ class PieCharts {
                         } 
                     }
                 },
-                cutout: '70%'
+                cutout: '70%',
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const sliceName = data.labels[index];
+                        if (window.detailsModal) {
+                            window.detailsModal.show(`completion_${sliceName}`, `${sliceName} Reminders - Details`);
+                        }
+                    }
+                }
             }
         };
         
