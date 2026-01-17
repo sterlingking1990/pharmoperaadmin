@@ -452,6 +452,32 @@ def get_details():
             print(f"Error in reminders_sent: {e}")
             details_df = pd.DataFrame([{'Error': str(e)}])
 
+    elif metric.startswith('medication_'):
+        try:
+            medication_name = metric.replace('medication_', '')
+            med_patients = pharmacy_df[pharmacy_df['medication_name'] == medication_name]
+            
+            patient_med_details = []
+            for patient_id in med_patients['patient_identifier'].unique():
+                patient_data = med_patients[med_patients['patient_identifier'] == patient_id]
+                
+                completed = (patient_data['status'] == 'completed').sum()
+                total = len(patient_data)
+                adherence_rate = (completed / total * 100) if total > 0 else 0
+                
+                patient_med_details.append({
+                    'Patient Name': patient_id,
+                    'Dosage': patient_data.iloc[0]['dosage'],
+                    'Frequency': patient_data.iloc[0]['frequency'],
+                    'Adherence Rate (%)': round(adherence_rate, 1),
+                    'Current Status': patient_data.iloc[-1]['status']
+                })
+            
+            details_df = pd.DataFrame(patient_med_details).sort_values('Adherence Rate (%)', ascending=False)
+        except Exception as e:
+            print(f"Error in medication details: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
     # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...

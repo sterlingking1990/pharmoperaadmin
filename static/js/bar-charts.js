@@ -22,6 +22,15 @@ class BarCharts {
                 scales: {
                     x: { grid: { color: 'rgba(0, 0, 0, 0.05)' } },
                     y: { grid: { display: false } }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const medicationName = data.labels[index];
+                        if (window.detailsModal) {
+                            window.detailsModal.show(`medication_${medicationName}`, `${medicationName} - Patient Details`);
+                        }
+                    }
                 }
             }
         };
