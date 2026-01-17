@@ -391,6 +391,42 @@ def get_details():
             print(f"Error in total_patients: {e}")
             details_df = pd.DataFrame([{'Error': str(e)}])
 
+    elif metric == 'adherence_rate':
+        try:
+            now = pd.Timestamp.now()
+            patient_adherence = []
+            
+            for patient_id in pharmacy_df['patient_identifier'].unique():
+                patient_data = pharmacy_df[pharmacy_df['patient_identifier'] == patient_id]
+                
+                completed = (patient_data['status'] == 'completed').sum()
+                # Convert to datetime and compare
+                reminder_times = pd.to_datetime(patient_data['next_reminder_time'], errors='coerce')
+                missed = ((reminder_times < now) & (patient_data['status'] != 'completed')).sum()
+                total_due = completed + missed
+                adherence_rate = (completed / total_due * 100) if total_due > 0 else 0
+                
+                # Categorize adherence
+                if adherence_rate > 80:
+                    category = "High (>80%)"
+                elif adherence_rate >= 60:
+                    category = "Medium (60-80%)"
+                else:
+                    category = "Low (<60%)"
+                
+                patient_adherence.append({
+                    'Patient Name': patient_id,
+                    'Completed': completed,
+                    'Missed': missed,
+                    'Adherence Rate (%)': round(adherence_rate, 1),
+                    'Category': category
+                })
+            
+            details_df = pd.DataFrame(patient_adherence).sort_values('Adherence Rate (%)', ascending=False)
+        except Exception as e:
+            print(f"Error in adherence_rate: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
     # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...

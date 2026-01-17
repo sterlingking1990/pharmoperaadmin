@@ -25,6 +25,13 @@ class KPICards {
                 window.detailsModal.show('total_patients', 'Total Patients - Details');
             }
         });
+
+        // Add click listener for the adherence rate card
+        document.getElementById('adherence-rate-card').addEventListener('click', () => {
+            if (window.detailsModal) {
+                window.detailsModal.show('adherence_rate', 'Adherence Rate - Patient Breakdown');
+            }
+        });
     }
 }
 
