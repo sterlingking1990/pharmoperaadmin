@@ -319,7 +319,7 @@ def dashboard():
     else:
         filters = {"medications": [], "statuses": [], "frequencies": []}
 
-    return render_template('dashboard.html', phone_no=phone_no, dashboard_data=json.dumps(dashboard_data, default=str), filters=json.dumps(filters))
+    return render_template('dashboard_modular.html', phone_no=phone_no, dashboard_data=json.dumps(dashboard_data, default=str), filters=json.dumps(filters))
 
 @app.route('/api/filter', methods=['POST'])
 def filter_data():

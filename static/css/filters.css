@@ -1,0 +1,59 @@
+#filter-panel {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%);
+    border-left: 4px solid #667eea;
+}
+
+#filter-panel .form-label {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+#filter-panel .form-select,
+#filter-panel .form-control {
+    border-radius: 0.5rem;
+    border: 1px solid #e0e0e0;
+    transition: all 0.2s ease;
+}
+
+#filter-panel .form-select:focus,
+#filter-panel .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+}
+
+#filter-panel .form-select[multiple] {
+    height: auto;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    background: var(--primary-gradient);
+    color: white;
+    border-radius: 2rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.filter-chip .remove {
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.filter-chip .remove:hover {
+    opacity: 1;
+}
+
+#clear-filters {
+    border-radius: 2rem;
+    transition: all 0.3s ease;
+}
+
+#clear-filters:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}

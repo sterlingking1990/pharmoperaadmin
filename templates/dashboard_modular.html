@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pharmacy Dashboard</title>
+    
+    <!-- External CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/kpi-cards.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/filters.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">⚕️ PharmOpera Admin</a>
+            <div class="d-flex align-items-center flex-wrap gap-3">
+                <span class="navbar-text">
+                    <small style="opacity: 0.7;">Logged in as:</small> <strong>{{ phone_no }}</strong>
+                </span>
+                <span class="navbar-text">
+                    <small style="opacity: 0.7;">Last Updated:</small> <strong id="last-updated">Never</strong>
+                </span>
+                <a href="/logout" class="btn btn-outline-danger">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid p-4">
+        <!-- No Data Message -->
+        <div id="no-data-message" class="alert alert-warning text-center" style="display: none;">
+            <h3>📊 No Data Available</h3>
+            <p>There is currently no reminder data available for your pharmacy. The dashboard will update automatically when new data arrives.</p>
+        </div>
+
+        <div id="main-dashboard">
+            <!-- Filter Panel -->
+            {% include 'components/filter-panel.html' %}
+            
+            <!-- KPI Cards -->
+            {% include 'components/kpi-cards.html' %}
+            
+            <!-- Charts -->
+            {% include 'components/charts.html' %}
+            
+            <!-- Data Table -->
+            {% include 'components/data-table.html' %}
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    {% include 'components/details-modal.html' %}
+
+    <!-- Hidden data for JavaScript -->
+    <script id="dashboard-data" type="application/json">{{ dashboard_data | safe }}</script>
+
+    <!-- External JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Modular JavaScript -->
+    <script src="{{ url_for('static', filename='js/chart-utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/kpi-cards.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/line-charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bar-charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pie-charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/data-table.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/filter-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/details-modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
