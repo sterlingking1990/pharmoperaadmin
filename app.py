@@ -503,6 +503,45 @@ def get_details():
             print(f"Error in status details: {e}")
             details_df = pd.DataFrame([{'Error': str(e)}])
 
+    elif metric.startswith('time_'):
+        try:
+            time_slot = metric.replace('time_', '')
+            
+            # Create time category from reminderTime
+            def categorize_time(time_str):
+                try:
+                    hour = int(time_str.split(':')[0])
+                    if hour < 12: return 'Morning'
+                    elif 12 <= hour < 17: return 'Afternoon'
+                    else: return 'Evening'
+                except:
+                    return 'Unknown'
+            
+            pharmacy_df['temp_time_category'] = pharmacy_df['reminderTime'].apply(categorize_time)
+            time_patients = pharmacy_df[pharmacy_df['temp_time_category'] == time_slot]
+            
+            time_details = []
+            for patient_id in time_patients['patient_identifier'].unique():
+                patient_data = time_patients[time_patients['patient_identifier'] == patient_id]
+                
+                # Calculate adherence for this time slot
+                completed = (patient_data['status'] == 'completed').sum()
+                total = len(patient_data)
+                adherence_rate = (completed / total * 100) if total > 0 else 0
+                
+                time_details.append({
+                    'Patient Name': patient_id,
+                    'Medication': patient_data.iloc[0]['medication_name'],
+                    'Exact Time': patient_data.iloc[0]['reminderTime'],
+                    'Adherence Rate (%)': round(adherence_rate, 1),
+                    'Total Reminders': total
+                })
+            
+            details_df = pd.DataFrame(time_details).sort_values('Adherence Rate (%)', ascending=False)
+        except Exception as e:
+            print(f"Error in time details: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
     # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...

@@ -87,6 +87,15 @@ class BarCharts {
                 scales: {
                     y: { grid: { color: 'rgba(0, 0, 0, 0.05)' } },
                     x: { grid: { display: false } }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const timeSlot = data.labels[index];
+                        if (window.detailsModal) {
+                            window.detailsModal.show(`time_${timeSlot}`, `${timeSlot} Reminders - Patient Details`);
+                        }
+                    }
                 }
             }
         };
