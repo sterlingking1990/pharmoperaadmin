@@ -291,6 +291,7 @@ def login():
     
     if not matches.empty:
         session['phone_no'] = phone_no
+        session['pharm_name'] = matches.iloc[0]['pharm_name']
         return redirect(url_for('dashboard'))
         
     return render_template('login.html', error="Invalid credentials. Please try again.")
@@ -319,7 +320,7 @@ def dashboard():
     else:
         filters = {"medications": [], "statuses": [], "frequencies": []}
 
-    return render_template('dashboard_modular.html', phone_no=phone_no, dashboard_data=json.dumps(dashboard_data, default=str), filters=json.dumps(filters))
+    return render_template('dashboard_modular.html', phone_no=phone_no, pharm_name=session.get('pharm_name', phone_no), dashboard_data=json.dumps(dashboard_data, default=str), filters=json.dumps(filters))
 
 @app.route('/api/filter', methods=['POST'])
 def filter_data():
@@ -371,7 +372,26 @@ def get_details():
         # Format date for better readability
         details_df['Next Reminder'] = details_df['Next Reminder'].dt.strftime('%Y-%m-%d %I:%M %p')
 
-    # Future metrics (e.g., 'total_patients', 'adherence_rate') can be added here
+    elif metric == 'total_patients':
+        try:
+            # Simple patient list with basic info
+            patient_list = []
+            for patient_id in pharmacy_df['patient_identifier'].unique():
+                patient_data = pharmacy_df[pharmacy_df['patient_identifier'] == patient_id]
+                
+                patient_list.append({
+                    'Patient Name': patient_id,
+                    'Phone Number': patient_data['phone_number'].iloc[0] if len(patient_data) > 0 else 'N/A',
+                    'Primary Medication': patient_data['medication_name'].iloc[0] if len(patient_data) > 0 else 'N/A',
+                    'Total Reminders': len(patient_data)
+                })
+            
+            details_df = pd.DataFrame(patient_list)
+        except Exception as e:
+            print(f"Error in total_patients: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
+    # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...
 

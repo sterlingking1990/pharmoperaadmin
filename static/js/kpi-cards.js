@@ -18,6 +18,13 @@ class KPICards {
                 window.detailsModal.show('pending_reminders', 'Pending Reminders - Details');
             }
         });
+
+        // Add click listener for the total patients card
+        document.getElementById('total-patients-card').addEventListener('click', () => {
+            if (window.detailsModal) {
+                window.detailsModal.show('total_patients', 'Total Patients - Details');
+            }
+        });
     }
 }
 
