@@ -24,6 +24,15 @@ class PieCharts {
                             font: { size: 12 } 
                         } 
                     }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const statusName = data.labels[index];
+                        if (window.detailsModal) {
+                            window.detailsModal.show(`status_${statusName}`, `${statusName} Reminders - Patient Details`);
+                        }
+                    }
                 }
             }
         };

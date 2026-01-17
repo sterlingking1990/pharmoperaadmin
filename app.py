@@ -478,6 +478,31 @@ def get_details():
             print(f"Error in medication details: {e}")
             details_df = pd.DataFrame([{'Error': str(e)}])
 
+    elif metric.startswith('status_'):
+        try:
+            status_name = metric.replace('status_', '').lower()
+            status_patients = pharmacy_df[pharmacy_df['status'] == status_name]
+            
+            status_details = []
+            for _, row in status_patients.iterrows():
+                # Calculate days in status
+                reminder_time = pd.to_datetime(row['next_reminder_time'], errors='coerce')
+                now = pd.Timestamp.now()
+                days_in_status = (now - reminder_time).days if pd.notna(reminder_time) else 0
+                
+                status_details.append({
+                    'Patient Name': row['patient_identifier'],
+                    'Medication': row['medication_name'],
+                    'Due Time': reminder_time.strftime('%Y-%m-%d %H:%M') if pd.notna(reminder_time) else 'N/A',
+                    'Days in Status': max(0, days_in_status),
+                    'Phone Number': row['phone_number']
+                })
+            
+            details_df = pd.DataFrame(status_details).sort_values('Days in Status', ascending=False)
+        except Exception as e:
+            print(f"Error in status details: {e}")
+            details_df = pd.DataFrame([{'Error': str(e)}])
+
     # Future metrics can be added here
     # elif metric == 'total_patients':
     #     ...
