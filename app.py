@@ -4,11 +4,12 @@ monkey.patch_all()
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from flask import Flask, render_template, request, redirect, session, url_for
-from flask_socketio import SocketIO
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify
+from flask_socketio import SocketIO, emit
 import json
 from threading import Thread, Event
 import numpy as np
+from datetime import timedelta
 
 app = Flask(__name__)
 app.secret_key = 'ee3e0441e14feb14cfb6290a30bc92e9babc20ffb44c6bea6e7d068eb20f2abb'
@@ -40,27 +41,109 @@ def get_google_sheet_data(tab_name):
         print(f"Error accessing Google Sheet '{tab_name}': {e}")
         return pd.DataFrame()
 
-def get_dashboard_data(phone_no, df):
+def apply_filters(pharmacy_df, filters):
+    """Apply filters to the pharmacy dataframe."""
+    filtered_df = pharmacy_df.copy()
+    
+    print(f"DEBUG: Starting with {len(filtered_df)} rows")
+    print(f"DEBUG: Filters received: {filters}")
+    
+    # Date Range Filter
+    if filters.get('dateRange') and filters['dateRange'] != 'all':
+        try:
+            days = int(filters['dateRange'])
+            cutoff_date = pd.Timestamp.now() - timedelta(days=days)
+            filtered_df = filtered_df[filtered_df['time_stamp'] >= cutoff_date]
+            print(f"DEBUG: After date filter ({days} days): {len(filtered_df)} rows")
+        except Exception as e:
+            print(f"DEBUG: Date filter error: {e}")
+    
+    # Status Filter - FIXED
+    if filters.get('status'):
+        status_list = filters['status']
+        print(f"DEBUG: Status filter value: {status_list}")
+        
+        if isinstance(status_list, str):
+            status_list = [status_list]
+        
+        if status_list and 'all' not in status_list:
+            # Convert to lowercase for comparison
+            status_list_lower = [s.lower() for s in status_list]
+            print(f"DEBUG: Filtering for statuses: {status_list_lower}")
+            print(f"DEBUG: Unique statuses in data: {filtered_df['status'].unique()}")
+            
+            filtered_df = filtered_df[filtered_df['status'].isin(status_list_lower)]
+            print(f"DEBUG: After status filter: {len(filtered_df)} rows")
+    
+    # Medication Filter
+    if filters.get('medication') and filters['medication'] != 'all':
+        filtered_df = filtered_df[filtered_df['medication_name'] == filters['medication']]
+        print(f"DEBUG: After medication filter: {len(filtered_df)} rows")
+    
+    # Patient Search Filter
+    if filters.get('patientSearch') and filters['patientSearch'].strip():
+        search_term = filters['patientSearch'].lower().strip()
+        filtered_df = filtered_df[
+            filtered_df['patient_identifier'].astype(str).str.lower().str.contains(search_term, na=False)
+        ]
+        print(f"DEBUG: After patient search filter: {len(filtered_df)} rows")
+    
+    # Check-in Filter
+    if filters.get('checkin') and filters['checkin'] != 'all':
+        filtered_df = filtered_df[filtered_df['should_check_in'] == filters['checkin']]
+        print(f"DEBUG: After check-in filter: {len(filtered_df)} rows")
+    
+    # Time of Day Filter
+    if filters.get('timeOfDay') and filters['timeOfDay'] != 'all':
+        time_filter = filters['timeOfDay'].capitalize()
+        filtered_df = filtered_df[filtered_df['time_category'] == time_filter]
+        print(f"DEBUG: After time filter: {len(filtered_df)} rows")
+    
+    # Frequency Filter
+    if filters.get('frequency') and filters['frequency'] != 'all':
+        filtered_df = filtered_df[filtered_df['frequency'] == filters['frequency']]
+        print(f"DEBUG: After frequency filter: {len(filtered_df)} rows")
+    
+    print(f"DEBUG: Final filtered count: {len(filtered_df)} rows")
+    return filtered_df
+
+def get_dashboard_data(phone_no, df, filters=None):
     """Processes the DataFrame to generate all data needed for the dashboard."""
     
-    df['pharmacy_id'] = df['pharmacy_id'].astype(str)
-    pharmacy_df = df[df['pharmacy_id'] == phone_no].copy()
+    # --- Robust primary filter with whitespace stripping ---
+    df['pharmacy_id'] = df['pharmacy_id'].astype(str).str.strip()
+    pharmacy_df = df[df['pharmacy_id'] == str(phone_no).strip()].copy()
 
     if pharmacy_df.empty:
         return {}
 
     # --- Robust Data Cleaning and Preparation ---
     pharmacy_df['status'] = pharmacy_df['status'].astype(str).str.strip().str.lower()
+    # time_stamp is already UTC-aware because source data has 'Z'
     pharmacy_df['time_stamp'] = pd.to_datetime(pharmacy_df['time_stamp'], errors='coerce')
     pharmacy_df['reminderTimeObj'] = pd.to_datetime(pharmacy_df['reminderTime'], format='%H:%M', errors='coerce').dt.time
-    pharmacy_df['next_reminder_time'] = pd.to_datetime(pharmacy_df['next_reminder_time'], errors='coerce')
+    # Make next_reminder_time UTC-aware to allow comparison
+    pharmacy_df['next_reminder_time'] = pd.to_datetime(pharmacy_df['next_reminder_time'], errors='coerce').dt.tz_localize('UTC', ambiguous='infer', nonexistent='NaT')
     pharmacy_df['should_check_in'] = pharmacy_df['should_check_in'].fillna('').astype(str).str.lower()
     
-    # --- Adherence Calculation ---
-    now = pd.Timestamp.now() # Use pandas native, timezone-naive timestamp for comparison
+    # Categorize time before filtering
+    def categorize_time(t):
+        if pd.notnull(t):
+            if t.hour < 12: return 'Morning'
+            if 12 <= t.hour < 17: return 'Afternoon'
+            return 'Evening'
+        return 'Unknown'
+    pharmacy_df['time_category'] = pharmacy_df['reminderTimeObj'].apply(categorize_time)
     
-    # Define 'missed' status for calculation
-    # A reminder is missed if its status is not 'completed' and its next reminder time is in the past.
+    # Apply filters if provided
+    if filters:
+        pharmacy_df = apply_filters(pharmacy_df, filters)
+        
+        if pharmacy_df.empty:
+            return get_empty_dashboard_data()
+    
+    # --- Adherence Calculation ---
+    now = pd.Timestamp.utcnow() # Use timezone-aware UTC timestamp
     missed_mask = (pharmacy_df['status'] != 'completed') & (pharmacy_df['next_reminder_time'] < now)
     
     completed_reminders = (pharmacy_df['status'] == 'completed').sum()
@@ -69,16 +152,41 @@ def get_dashboard_data(phone_no, df):
     total_relevant_reminders = completed_reminders + missed_reminders
     adherence_rate = (completed_reminders / total_relevant_reminders) * 100 if total_relevant_reminders > 0 else 0
 
+    # Apply adherence level filter if needed
+    if filters and filters.get('adherence') and filters['adherence'] != 'all':
+        adherence_level = filters['adherence']
+        # This logic returns an empty dashboard if the adherence rate doesn't match the filter
+        patient_adherence = pharmacy_df.groupby('patient_identifier').apply(
+            lambda x: (x['status'] == 'completed').sum() / ((x['status'] == 'completed').sum() + ((x['status'] != 'completed') & (x['next_reminder_time'] < now)).sum()) * 100
+        ).fillna(0)
+        
+        high_adherence_patients = patient_adherence[patient_adherence > 80].index
+        medium_adherence_patients = patient_adherence[(patient_adherence >= 60) & (patient_adherence <= 80)].index
+        low_adherence_patients = patient_adherence[patient_adherence < 60].index
+
+        if adherence_level == 'high':
+            pharmacy_df = pharmacy_df[pharmacy_df['patient_identifier'].isin(high_adherence_patients)]
+        elif adherence_level == 'medium':
+            pharmacy_df = pharmacy_df[pharmacy_df['patient_identifier'].isin(medium_adherence_patients)]
+        elif adherence_level == 'low':
+            pharmacy_df = pharmacy_df[pharmacy_df['patient_identifier'].isin(low_adherence_patients)]
+        
+        if pharmacy_df.empty:
+            return get_empty_dashboard_data()
+
+
     # --- KPI Cards ---
     total_patients = pharmacy_df['patient_identifier'].nunique()
     status_counts = pharmacy_df['status'].value_counts()
     pending_reminders = status_counts.get('pending', 0) + status_counts.get('upcoming', 0)
 
     # --- Adherence Trend (Line Chart) ---
-    # Note: Using 'time_stamp' for the date axis of the trend.
     adherence_df = pharmacy_df[pharmacy_df['status'].isin(['completed']) | missed_mask].copy()
-    adherence_df['date'] = adherence_df['time_stamp'].dt.date
-    adherence_by_day = adherence_df.groupby('date')['status'].apply(lambda x: (x == 'completed').sum() / len(x) * 100 if len(x) > 0 else 0).reset_index()
+    # Group by the reminder's due date for a more intuitive trend
+    adherence_df['date'] = adherence_df['next_reminder_time'].dt.date
+    adherence_by_day = adherence_df.groupby('date')['status'].apply(
+        lambda x: (x == 'completed').sum() / len(x) * 100 if len(x) > 0 else 0
+    ).reset_index()
     adherence_by_day = adherence_by_day.sort_values('date')
 
     # --- Top Medications / Dosages ---
@@ -86,13 +194,6 @@ def get_dashboard_data(phone_no, df):
     dosage_dist = pharmacy_df['dosage'].value_counts().nlargest(5)
 
     # --- Reminders by Time of Day ---
-    def categorize_time(t):
-        if pd.notnull(t):
-            if t.hour < 12: return 'Morning'
-            if 12 <= t.hour < 17: return 'Afternoon'
-            return 'Evening'
-        return 'Unknown'
-    pharmacy_df['time_category'] = pharmacy_df['reminderTimeObj'].apply(categorize_time)
     reminders_by_time = pharmacy_df['time_category'].value_counts()
     
     # --- Upcoming vs Completed ---
@@ -100,7 +201,7 @@ def get_dashboard_data(phone_no, df):
 
     # --- Patients Needing Check-In (Table) ---
     check_in_patients = pharmacy_df[pharmacy_df['should_check_in'] == 'yes']
-    check_in_table = check_in_patients[['patient_identifier', 'medication_name', 'status', 'check_in_message']].to_dict('records')
+    check_in_table = check_in_patients[['patient_identifier', 'phone_number', 'medication_name', 'status', 'check_in_message']].to_dict('records')
 
     # --- Final Data Structure ---
     dashboard_data = {
@@ -132,15 +233,28 @@ def get_dashboard_data(phone_no, df):
         },
         "upcoming_vs_completed": {
             "labels": ['Upcoming', 'Completed'],
-            "data": [int(upcoming_vs_completed.get('pending', 0) + upcoming_vs_completed.get('upcoming', 0)), int(upcoming_vs_completed.get('completed', 0))]
+            "data": [int(upcoming_vs_completed.get('pending', 0) + upcoming_vs_completed.get('upcoming', 0)), 
+                     int(upcoming_vs_completed.get('completed', 0))]
         },
         "check_in_table": check_in_table
     }
     return dashboard_data
 
+def get_empty_dashboard_data():
+    """Returns empty dashboard structure when filters result in no data."""
+    return {
+        "kpi_cards": { "total_patients": 0, "adherence_rate": "0.0", "reminders_sent": 0, "pending_reminders": 0 },
+        "adherence_trend": {"labels": [], "data": []},
+        "reminder_status": {"labels": [], "data": []},
+        "top_medications": {"labels": [], "data": []},
+        "dosage_distribution": {"labels": [], "data": []},
+        "reminders_by_time": {"labels": ['Morning', 'Afternoon', 'Evening', 'Unknown'], "data": [0, 0, 0, 0]},
+        "upcoming_vs_completed": {"labels": ['Upcoming', 'Completed'], "data": [0, 0]},
+        "check_in_table": []
+    }
 
 def poll_google_sheet():
-    """Background thread to poll Google Sheet for changes and push updates."""
+    """Background thread to poll Google Sheet for changes and notify clients."""
     last_data_hash = None
     while not thread_stop_event.isSet():
         df = get_google_sheet_data(REMINDER_TAB)
@@ -149,11 +263,9 @@ def poll_google_sheet():
             if last_data_hash is None or current_data_hash != last_data_hash:
                 last_data_hash = current_data_hash
                 
-                all_pharmacy_ids = df['pharmacy_id'].astype(str).unique()
-                for phone_no in all_pharmacy_ids:
-                    dashboard_data = get_dashboard_data(phone_no, df)
-                    if dashboard_data:
-                         socketio.emit('update_data', {'data': json.dumps(dashboard_data, default=str)}, room=phone_no)
+                print("Data change detected, emitting 'data_changed' to all clients.")
+                # Emit a simple notification. The client will trigger a filter refresh.
+                socketio.emit('data_changed')
         socketio.sleep(10)
 
 # --- Flask Routes ---
@@ -165,14 +277,14 @@ def home():
 
 @app.route('/login', methods=['POST'])
 def login():
-    phone_no = request.form['phone_no']
+    phone_no = request.form['phone_no'].strip()
     unique_code = request.form['unique_code']
     
     users_df = get_google_sheet_data(USERS_TAB)
     if users_df.empty:
         return render_template('login.html', error="Could not verify users at this time.")
 
-    users_df['phone_no'] = users_df['phone_no'].astype(str)
+    users_df['phone_no'] = users_df['phone_no'].astype(str).str.strip()
     users_df['unique_code'] = users_df['unique_code'].astype(str)
 
     matches = users_df[(users_df['phone_no'] == phone_no) & (users_df['unique_code'] == unique_code)]
@@ -190,9 +302,80 @@ def dashboard():
         
     phone_no = session.get('phone_no')
     df = get_google_sheet_data(REMINDER_TAB)
-    dashboard_data = get_dashboard_data(phone_no, df)
+    # Load initial data with default filters (or no filters)
+    dashboard_data = get_dashboard_data(phone_no, df, {"dateRange":"all"}) # Default to All Time
 
-    return render_template('dashboard.html', phone_no=phone_no, dashboard_data=json.dumps(dashboard_data, default=str))
+    # For the initial load, we also need to get the unique filter options from the *unfiltered* data
+    if not df.empty:
+        pharmacy_df = df[df['pharmacy_id'].astype(str).str.strip() == str(phone_no).strip()].copy()
+        if not pharmacy_df.empty:
+            filters = {
+                "medications": sorted(pharmacy_df['medication_name'].unique().tolist()),
+                "statuses": sorted(pharmacy_df['status'].str.strip().str.lower().unique().tolist()),
+                "frequencies": sorted(pharmacy_df['frequency'].unique().tolist())
+            }
+        else:
+            filters = {"medications": [], "statuses": [], "frequencies": []}
+    else:
+        filters = {"medications": [], "statuses": [], "frequencies": []}
+
+    return render_template('dashboard.html', phone_no=phone_no, dashboard_data=json.dumps(dashboard_data, default=str), filters=json.dumps(filters))
+
+@app.route('/api/filter', methods=['POST'])
+def filter_data():
+    """API endpoint to handle filter requests."""
+    if 'phone_no' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    phone_no = session.get('phone_no')
+    filters = request.json
+    
+    df = get_google_sheet_data(REMINDER_TAB)
+    dashboard_data = get_dashboard_data(phone_no, df, filters)
+    
+    return jsonify(dashboard_data)
+
+@app.route('/api/details')
+def get_details():
+    """API endpoint to get detailed data for drill-downs."""
+    if 'phone_no' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    phone_no = session.get('phone_no')
+    metric = request.args.get('metric')
+    
+    df = get_google_sheet_data(REMINDER_TAB)
+    if df.empty:
+        return jsonify([])
+
+    # Basic cleaning
+    df['pharmacy_id'] = df['pharmacy_id'].astype(str).str.strip()
+    df['status'] = df['status'].astype(str).str.strip().str.lower()
+    df['next_reminder_time'] = pd.to_datetime(df['next_reminder_time'], errors='coerce')
+
+    pharmacy_df = df[df['pharmacy_id'] == str(phone_no).strip()].copy()
+
+    details_df = pd.DataFrame()
+
+    if metric == 'pending_reminders':
+        details_df = pharmacy_df[pharmacy_df['status'].isin(['pending', 'upcoming'])]
+        # Select and rename columns for clarity in the modal
+        details_df = details_df[[
+            'patient_identifier', 'phone_number', 'medication_name', 'next_reminder_time'
+        ]].rename(columns={
+            'patient_identifier': 'Patient Name',
+            'phone_number': 'Phone Number',
+            'medication_name': 'Medication',
+            'next_reminder_time': 'Next Reminder'
+        })
+        # Format date for better readability
+        details_df['Next Reminder'] = details_df['Next Reminder'].dt.strftime('%Y-%m-%d %I:%M %p')
+
+    # Future metrics (e.g., 'total_patients', 'adherence_rate') can be added here
+    # elif metric == 'total_patients':
+    #     ...
+
+    return jsonify(details_df.to_dict('records'))
 
 @app.route('/logout')
 def logout():
@@ -201,7 +384,7 @@ def logout():
 
 # --- Socket.IO Handlers ---
 @socketio.on('connect')
-def on_connect():
+def on_connect(auth=None):
     if 'phone_no' in session:
         phone_no = session.get('phone_no')
         socketio.join_room(phone_no)
@@ -217,6 +400,20 @@ def on_disconnect():
         phone_no = session.get('phone_no')
         socketio.leave_room(phone_no)
         print(f"Client disconnected and left room: {phone_no}")
+
+@socketio.on('apply_filters')
+def handle_filters(data):
+    """Handle real-time filter updates via Socket.IO."""
+    if 'phone_no' not in session:
+        return
+    
+    phone_no = session.get('phone_no')
+    filters = data.get('filters', {})
+    
+    df = get_google_sheet_data(REMINDER_TAB)
+    dashboard_data = get_dashboard_data(phone_no, df, filters)
+    
+    emit('filtered_data', {'data': json.dumps(dashboard_data, default=str)})
 
 if __name__ == '__main__':
     print("Starting PharmOpera Admin server...")
