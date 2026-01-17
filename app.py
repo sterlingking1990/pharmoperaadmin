@@ -35,23 +35,32 @@ thread = Thread()
 thread_stop_event = Event()
 
 def get_google_sheet_data(tab_name):
-    """Fetches all records from a specific tab in the Google Sheet."""
     try:
-        # Use environment variables for credentials
-        if os.environ.get('GOOGLE_CREDENTIALS'):
-            # For production (Vercel)
-            import json
-            creds_dict = json.loads(os.environ.get('GOOGLE_CREDENTIALS'))
-            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        import json
+
+        if os.environ.get("GOOGLE_CREDENTIALS"):
+            creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+
+            # 🔴 THIS LINE IS CRITICAL
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
+            creds = Credentials.from_service_account_info(
+                creds_dict,
+                scopes=SCOPES
+            )
         else:
-            # For local development
-            creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+            creds = Credentials.from_service_account_file(
+                SERVICE_ACCOUNT_FILE,
+                scopes=SCOPES
+            )
+
         client = gspread.authorize(creds)
         sheet = client.open(SHEET_NAME).worksheet(tab_name)
         records = sheet.get_all_records()
         return pd.DataFrame(records)
+
     except Exception as e:
-        print(f"Error accessing Google Sheet '{tab_name}': {e}")
+        print(f"[GOOGLE SHEETS ERROR] Tab={tab_name} | {repr(e)}")
         return pd.DataFrame()
 
 def apply_filters(pharmacy_df, filters):
