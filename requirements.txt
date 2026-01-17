@@ -8,3 +8,4 @@ google-auth-httplib2
 gevent
 gevent-websocket
 gunicorn
+python-dotenv

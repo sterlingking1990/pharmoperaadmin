@@ -1,6 +1,10 @@
 import os
+from dotenv import load_dotenv
 from gevent import monkey
 monkey.patch_all()
+
+# Load environment variables from .env file
+load_dotenv()
 
 import pandas as pd
 import gspread
@@ -13,7 +17,7 @@ import numpy as np
 from datetime import timedelta
 
 app = Flask(__name__)
-app.secret_key = 'ee3e0441e14feb14cfb6290a30bc92e9babc20ffb44c6bea6e7d068eb20f2abb'
+app.secret_key = os.environ.get('SECRET_KEY', 'd6216c369373cf88f08e443b5071575acb4a7d5e1e1c2739e1cd0c313f9fefca')
 socketio = SocketIO(app, async_mode='threading', cors_allowed_origins="*")
 
 # --- Google Sheets Configuration ---
@@ -22,9 +26,9 @@ SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ]
-SHEET_NAME = 'patient_reminder'
-USERS_TAB = 'pharmacyonboarding'
-REMINDER_TAB = 'ReminderData'
+SHEET_NAME = os.environ.get('SHEET_NAME', 'patient_reminder')
+USERS_TAB = os.environ.get('USERS_TAB', 'pharmacyonboarding')
+REMINDER_TAB = os.environ.get('REMINDER_TAB', 'ReminderData')
 
 # --- Background Thread for Polling ---
 thread = Thread()
@@ -33,7 +37,15 @@ thread_stop_event = Event()
 def get_google_sheet_data(tab_name):
     """Fetches all records from a specific tab in the Google Sheet."""
     try:
-        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        # Use environment variables for credentials
+        if os.environ.get('GOOGLE_CREDENTIALS'):
+            # For production (Vercel)
+            import json
+            creds_dict = json.loads(os.environ.get('GOOGLE_CREDENTIALS'))
+            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        else:
+            # For local development
+            creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
         client = gspread.authorize(creds)
         sheet = client.open(SHEET_NAME).worksheet(tab_name)
         records = sheet.get_all_records()
@@ -635,7 +647,7 @@ def handle_filters(data):
 
 if __name__ == '__main__':
     print("Starting PharmOpera Admin server...")
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, use_reloader=False, log_output=True)
 
 # Export for Vercel
 handler = app
