@@ -645,9 +645,9 @@ def handle_filters(data):
     
     emit('filtered_data', {'data': json.dumps(dashboard_data, default=str)})
 
-if __name__ == '__main__':
-    print("Starting PharmOpera Admin server...")
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, allow_unsafe_werkzeug=True)
+# if __name__ == '__main__':
+#     print("Starting PharmOpera Admin server...")
+#     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, allow_unsafe_werkzeug=True)
 
 # Export for Vercel
 handler = app
