@@ -1,3 +1,4 @@
+import os
 from gevent import monkey
 monkey.patch_all()
 
@@ -13,7 +14,7 @@ from datetime import timedelta
 
 app = Flask(__name__)
 app.secret_key = 'ee3e0441e14feb14cfb6290a30bc92e9babc20ffb44c6bea6e7d068eb20f2abb'
-socketio = SocketIO(app, async_mode='gevent')
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins="*")
 
 # --- Google Sheets Configuration ---
 SERVICE_ACCOUNT_FILE = 'credentials.json'
@@ -634,4 +635,7 @@ def handle_filters(data):
 
 if __name__ == '__main__':
     print("Starting PharmOpera Admin server...")
-    socketio.run(app, debug=True)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
+# Export for Vercel
+handler = app
