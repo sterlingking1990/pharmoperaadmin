@@ -215,8 +215,24 @@ class FilterManager {
     applyFilters() {
         this.updateFilterChips();
         
-        if (this.socket) {
+        console.log('Applying filters:', JSON.stringify(this.filterState, null, 2));
+        
+        if (this.socket && this.socket.connected) {
             this.socket.emit('apply_filters', { filters: this.filterState });
+        } else {
+            // Fallback to HTTP request if socket not connected
+            fetch('/api/filter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.filterState)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (window.dashboard) {
+                    window.dashboard.updateDashboard(data);
+                }
+            })
+            .catch(error => console.error('Filter error:', error));
         }
     }
 }
