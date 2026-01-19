@@ -14,3 +14,6 @@ env/
 # Local data files
 *.csv
 fly.toml
+prescription_scheduling_prompt.md
+update_prompt.txt
+

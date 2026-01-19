@@ -616,6 +616,13 @@ def get_details():
 
     return jsonify(details_df.to_dict('records'))
 
+
+@app.route('/schedule')
+def schedule():
+    if 'phone_no' not in session:
+        return redirect(url_for('home'))
+    return render_template('prescription_scheduling.html')
+
 @app.route('/logout')
 def logout():
     session.clear()

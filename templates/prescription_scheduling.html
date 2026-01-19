@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Prescription | PharmOpera</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/prescription-scheduling.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">⚕️ PharmOpera Admin</a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/dashboard" class="btn btn-outline-secondary">
+                    <span>← Back to Dashboard</span>
+                </a>
+                <a href="/logout" class="btn btn-outline-danger">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="prescription-container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>📋 Schedule a New Prescription</h1>
+            <p>Complete the form below to schedule medication reminders for your patient</p>
+        </div>
+
+        <!-- Main Form Card -->
+        <div class="prescription-card">
+            <form id="prescription-form">
+                <!-- Patient Details Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <span class="icon">👤</span>
+                        <h2>Patient Details</h2>
+                    </div>
+                    <div class="input-group-enhanced">
+                        <div>
+                            <label for="patient-name" class="form-label">Patient Name/ID</label>
+                            <input type="text" id="patient-name" class="form-control" placeholder="Enter patient name or ID" required>
+                        </div>
+                        <div>
+                            <label for="patient-contact" class="form-label">Contact Information</label>
+                            <input type="text" id="patient-contact" class="form-control" placeholder="Phone number or email address" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Medications Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <span class="icon">💊</span>
+                        <h2>Medications</h2>
+                    </div>
+                    <div id="medications-container">
+                        <!-- Medication entries will be added here by JS -->
+                    </div>
+                    <button type="button" id="add-medication" class="btn btn-secondary mt-3">
+                        Add Another Medication
+                    </button>
+                </div>
+
+                <!-- Contact & Check-in Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <span class="icon">📞</span>
+                        <h2>Contact & Check-in</h2>
+                    </div>
+                    <div class="input-row">
+                        <div>
+                            <label for="contact-method" class="form-label">Preferred Contact Method</label>
+                            <select id="contact-method" class="form-select">
+                                <option value="WhatsApp">WhatsApp</option>
+                                <option value="SMS">SMS</option>
+                                <option value="Email">Email</option>
+                                <option value="Call">Phone Call</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="check-in" class="form-label">Check-in Days After Completion</label>
+                            <input type="number" id="check-in" class="form-control" placeholder="e.g., 7" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes Section -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <span class="icon">📝</span>
+                        <h2>Additional Notes</h2>
+                    </div>
+                    <div>
+                        <label for="pharmacist-notes" class="form-label">Pharmacist Notes (Optional)</label>
+                        <textarea id="pharmacist-notes" class="form-control" rows="4" placeholder="Add any special instructions, allergies, or important notes..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="submit-button">
+                    <button type="submit" class="btn btn-primary">
+                        ✓ Schedule Prescription
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/prescription_scheduling.js') }}"></script>
+</body>
+</html>
