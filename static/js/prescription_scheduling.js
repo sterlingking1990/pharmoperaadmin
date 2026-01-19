@@ -9,6 +9,25 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', handleFormSubmit);
 });
 
+function updateMedicationNumbers() {
+    const medicationsContainer = document.getElementById('medications-container');
+    const medications = medicationsContainer.querySelectorAll('.medication');
+    
+    medications.forEach((med, index) => {
+        // Update number
+        const numberElement = med.querySelector('.medication-number');
+        if (numberElement) {
+            numberElement.textContent = index + 1;
+        }
+        
+        // Show/hide remove buttons
+        const removeBtn = med.querySelector('.remove-medication');
+        if (removeBtn) {
+            removeBtn.style.display = medications.length > 1 ? 'flex' : 'none';
+        }
+    });
+}
+
 function addMedicationField() {
     const medicationsContainer = document.getElementById('medications-container');
     const medicationCount = medicationsContainer.children.length + 1;
@@ -33,7 +52,18 @@ function addMedicationField() {
         <div class="frequency-duration-grid mb-3">
             <div>
                 <label class="form-label">Frequency</label>
-                <input type="text" class="form-control frequency" placeholder="e.g., twice daily" required>
+                <select class="form-select frequency" required>
+                    <option value="once daily" selected>Once Daily</option>
+                    <option value="twice daily">Twice Daily</option>
+                    <option value="three times daily">Three Times Daily</option>
+                    <option value="four times daily">Four Times Daily</option>
+                    <option value="every 6 hours">Every 6 Hours</option>
+                    <option value="every 8 hours">Every 8 Hours</option>
+                    <option value="every 12 hours">Every 12 Hours</option>
+                    <option value="as needed">As Needed</option>
+                    <option value="once weekly">Once Weekly</option>
+                    <option value="once monthly">Once Monthly</option>
+                </select>
             </div>
             <div>
                 <label class="form-label">Duration</label>
@@ -68,25 +98,14 @@ function addMedicationField() {
     });
 }
 
-function updateMedicationNumbers() {
-    const medicationsContainer = document.getElementById('medications-container');
-    const medications = medicationsContainer.querySelectorAll('.medication');
-    
-    medications.forEach((med, index) => {
-        // Update number
-        const numberElement = med.querySelector('.medication-number');
-        if (numberElement) {
-            numberElement.textContent = index + 1;
-        }
-        
-        // Show/hide remove buttons
-        const removeBtn = med.querySelector('.remove-medication');
-        if (removeBtn) {
-            removeBtn.style.display = medications.length > 1 ? 'flex' : 'none';
-        }
-    });
-}
+function isValidReminderTimeFormat(timeInput) {
+    if (!timeInput) return true; // Empty is valid, will be auto-calculated
 
+    // Regex for HH:MM AM/PM format (e.g., "09:00 AM", "5:30 PM")
+    // Allows for single or multiple times separated by commas
+    const timeRegex = /^(\d{1,2}:\d{2}\s*(AM|PM))(,\s*\d{1,2}:\d{2}\s*(AM|PM))*$/i;
+    return timeRegex.test(timeInput.trim());
+}
 
 /**
  * Main handler for the form submission.
@@ -109,9 +128,10 @@ async function handleFormSubmit(event) {
     const medicationElements = document.querySelectorAll('.medication');
     let items = [];
     let allEndDates = [];
+    let formIsValid = true;
 
     // 3. Process each medication item
-    medicationElements.forEach(medElement => {
+    medicationElements.forEach((medElement, index) => {
         const med = {
             patient_identifier: patientIdentifier,
             contact_method: contactMethod,
@@ -127,7 +147,18 @@ async function handleFormSubmit(event) {
         };
 
         // Basic Validation
-        if (!med.medication_name || !med.dosage || !med.frequency) return;
+        if (!med.medication_name || !med.dosage || !med.frequency) {
+            showMessage(`Error in Medication ${index + 1}: Medication Name, Dosage, and Frequency are required.`, 'danger');
+            formIsValid = false;
+            return;
+        }
+
+        // Validate Reminder Time Format
+        if (!isValidReminderTimeFormat(med.reminder_time_input)) {
+            showMessage(`Error in Medication ${index + 1}: Reminder Time(s) must be in HH:MM AM/PM format, separated by commas (e.g., '09:00 AM, 05:30 PM').`, 'danger');
+            formIsValid = false;
+            return;
+        }
 
         // Calculate start_date (YYYY-MM-DD)
         med.start_date = med.start_date_input || new Date().toISOString().split('T')[0];
@@ -147,6 +178,11 @@ async function handleFormSubmit(event) {
 
         items.push(med);
     });
+
+    if (!formIsValid) {
+        return; // Stop submission if any medication failed validation
+    }
+
 
     // 4. Handle Check-in Logic
     if (checkInDaysAfter && items.length > 0) {
@@ -220,6 +256,9 @@ function calculateReminderTimes(frequency, reminderTimeInput) {
     if (freqLower.includes('three times daily') || freqLower.includes('8 hourly')) return "09:00 AM, 05:00 PM, 01:00 AM";
     if (freqLower.includes('four times daily') || freqLower.includes('6 hourly')) return "09:00 AM, 03:00 PM, 09:00 PM, 03:00 AM";
     
+    // New defaults for less frequent reminders
+    if (freqLower.includes('once weekly') || freqLower.includes('once monthly')) return "09:00 AM";
+
     // Default for unknown frequency
     return "09:00 AM";
 }
