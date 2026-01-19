@@ -71,7 +71,7 @@ function addMedicationField() {
             </div>
             <div>
                 <label class="form-label">Start Date</label>
-                <input type="date" class="form-control start-date">
+                <input type="date" class="form-control start-date" min="${new Date().toISOString().split('T')[0]}">
             </div>
         </div>
         
@@ -151,6 +151,16 @@ async function handleFormSubmit(event) {
             showMessage(`Error in Medication ${index + 1}: Medication Name, Dosage, and Frequency are required.`, 'danger');
             formIsValid = false;
             return;
+        }
+
+        // Validate start date is not in the past
+        if (med.start_date_input) {
+            const today = new Date().toISOString().split('T')[0];
+            if (med.start_date_input < today) {
+                showMessage(`Error in Medication ${index + 1}: Start date cannot be in the past. Please select today or a future date.`, 'danger');
+                formIsValid = false;
+                return;
+            }
         }
 
         // Validate Reminder Time Format
