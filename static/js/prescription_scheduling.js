@@ -26,7 +26,7 @@ function addMedicationField() {
             </div>
             <div class="col-md-4">
                 <label class="form-label">Dosage</label>
-                <input type="text" class="form-control dosage" placeholder="e.g., 500mg" required>
+                <input type="text" class="form-control dosage" placeholder="e.g., 1 tablet 500mg" required>
             </div>
         </div>
         
@@ -402,21 +402,21 @@ function sendToWebhook(finalPayload) { // Renamed 'data' to 'finalPayload' for c
  * Shows a styled message to the user
  */
 function showMessage(message, type = 'info') {
-    // Remove any existing messages
-    const existingAlert = document.querySelector('.alert');
-    if (existingAlert) {
-        existingAlert.remove();
+    const statusMessageContainer = document.getElementById('form-status-message');
+    if (!statusMessageContainer) {
+        console.error("Error: form-status-message container not found.");
+        return;
     }
 
-    // Create new alert
+    // Clear any existing messages in the container
+    statusMessageContainer.innerHTML = '';
+
     const alert = document.createElement('div');
     alert.className = `alert alert-${type}`;
     alert.innerHTML = message;
-    alert.style.marginBottom = '1.5rem';
+    alert.style.marginBottom = '0'; // Adjust margin as needed for the new placement
 
-    // Insert at the top of the prescription card
-    const prescriptionCard = document.querySelector('.prescription-card');
-    prescriptionCard.insertBefore(alert, prescriptionCard.firstChild);
+    statusMessageContainer.appendChild(alert);
 
     // Auto-dismiss after 5 seconds
     setTimeout(() => {
