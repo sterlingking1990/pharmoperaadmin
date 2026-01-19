@@ -120,9 +120,11 @@ async function handleFormSubmit(event) {
     const checkInDaysAfter = document.getElementById('check-in').value;
     const pharmacistNotes = document.getElementById('pharmacist-notes').value;
     
-    // 2. Format phone number
-    if (['WhatsApp', 'SMS', 'Call'].includes(contactMethod)) {
-        patientContact = formatPhoneNumber(patientContact);
+    // 2. Validate and format phone number (Nigerian numbers only)
+    patientContact = formatPhoneNumber(patientContact);
+    if (!patientContact) {
+        showMessage('Invalid phone number. Please enter a valid Nigerian phone number (e.g., 08012345678 or +2348012345678). Only Nigerian numbers are supported at this time.', 'danger');
+        return;
     }
 
     const medicationElements = document.querySelectorAll('.medication');
@@ -134,9 +136,9 @@ async function handleFormSubmit(event) {
     medicationElements.forEach((medElement, index) => {
         const med = {
             patient_identifier: patientIdentifier,
-            contact_method: contactMethod,
-            phone_number: ['WhatsApp', 'SMS', 'Call'].includes(contactMethod) ? patientContact : null,
-            email_address: contactMethod === 'Email' ? patientContact : null,
+            contact_method: 'WhatsApp', // Always WhatsApp for now
+            phone_number: patientContact,
+            email_address: null, // Email not supported currently
             medication_name: medElement.querySelector('.medication-name').value,
             dosage: medElement.querySelector('.dosage').value,
             frequency: medElement.querySelector('.frequency').value,
@@ -236,19 +238,53 @@ async function handleFormSubmit(event) {
 }
 
 /**
- * Formats a Nigerian phone number to include the +234 prefix.
+ * Validates and formats a Nigerian phone number.
+ * Converts 08012345678 to 2348012345678, but keeps 234... or +234... as-is.
+ * @param {string} phone - The phone number to validate
+ * @returns {string|null} - The formatted phone number, or null if invalid
  */
 function formatPhoneNumber(phone) {
     if (!phone) return null;
-    phone = phone.trim();
-    if (phone.startsWith('0') && (phone.length === 11)) {
-        return '+234' + phone.substring(1);
+    
+    // Remove all spaces, dashes, and parentheses
+    phone = phone.trim().replace(/[\s\-\(\)]/g, '');
+    
+    // Handle Nigerian numbers starting with 0 (e.g., 08012345678)
+    if (phone.startsWith('0') && phone.length === 11) {
+        // Validate it's a valid Nigerian mobile number
+        // Valid prefixes: 0701-0709, 0802-0809, 0810-0819, 0901-0909, 0913-0918
+        const firstDigit = phone.charAt(1);
+        if (['7', '8', '9'].includes(firstDigit)) {
+            return '234' + phone.substring(1); // Convert 0 to 234
+        } else {
+            return null; // Invalid Nigerian number
+        }
     }
+    
+    // Handle numbers starting with 234 (e.g., 2348012345678)
+    if (phone.startsWith('234') && phone.length === 13) {
+        // Validate the mobile prefix (must start with 7, 8, or 9)
+        const firstDigit = phone.charAt(3);
+        if (['7', '8', '9'].includes(firstDigit)) {
+            return phone; // Return as-is
+        } else {
+            return null;
+        }
+    }
+    
+    // Handle numbers already with +234 prefix (e.g., +2348012345678)
     if (phone.startsWith('+234') && phone.length === 14) {
-        return phone;
+        // Validate the mobile prefix (must start with 7, 8, or 9)
+        const firstDigit = phone.charAt(4);
+        if (['7', '8', '9'].includes(firstDigit)) {
+            return phone; // Return as-is
+        } else {
+            return null;
+        }
     }
-    // Return as is if it doesn't match expected formats, for international numbers
-    return phone;
+    
+    // Reject any other format (only Nigerian numbers are supported)
+    return null;
 }
 
 /**

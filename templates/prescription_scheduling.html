@@ -45,8 +45,9 @@
                             <input type="text" id="patient-name" class="form-control" placeholder="Enter patient name or ID" required>
                         </div>
                         <div>
-                            <label for="patient-contact" class="form-label">Contact Information</label>
-                            <input type="text" id="patient-contact" class="form-control" placeholder="Phone number or email address" required>
+                            <label for="patient-contact" class="form-label">WhatsApp Phone Number</label>
+                            <input type="tel" id="patient-contact" class="form-control" placeholder="e.g., 08012345678 or 2348012345678" required pattern="^(\+?234|0)[789][01]\d{8}$" title="Please enter a valid Nigerian phone number">
+                            <small class="text-muted">Nigerian numbers only. Format: 08012345678 or 2348012345678</small>
                         </div>
                     </div>
                 </div>
@@ -73,13 +74,9 @@
                     </div>
                     <div class="input-row">
                         <div>
-                            <label for="contact-method" class="form-label">Preferred Contact Method</label>
-                            <select id="contact-method" class="form-select">
-                                <option value="WhatsApp">WhatsApp</option>
-                                <option value="SMS">SMS</option>
-                                <option value="Email">Email</option>
-                                <option value="Call">Phone Call</option>
-                            </select>
+                            <label for="contact-method" class="form-label">Contact Method</label>
+                            <input type="text" id="contact-method" class="form-control" value="WhatsApp" readonly style="background-color: #f8f9fa;">
+                            <small class="text-muted">Currently only WhatsApp reminders are supported</small>
                         </div>
                         <div>
                             <label for="check-in" class="form-label">Check-in Days After Completion</label>
