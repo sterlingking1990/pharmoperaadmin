@@ -222,8 +222,14 @@ def get_dashboard_data(phone_no, df, filters=None):
     upcoming_vs_completed = status_counts
 
     # --- Patients Needing Check-In (Table) ---
-    check_in_patients = pharmacy_df[pharmacy_df['should_check_in'] == 'yes']
-    check_in_table = check_in_patients[['patient_identifier', 'phone_number', 'medication_name', 'status', 'check_in_message']].to_dict('records')
+    check_in_patients = pharmacy_df[pharmacy_df['should_check_in'] == 'yes'].copy()
+    if not check_in_patients.empty:
+        # Ensure check_in_date is datetime and format it
+        check_in_patients['check_in_date'] = pd.to_datetime(check_in_patients['check_in_date'], errors='coerce')
+        check_in_patients = check_in_patients.dropna(subset=['check_in_date']) # Drop rows where date conversion failed
+        check_in_patients['check_in_date'] = check_in_patients['check_in_date'].dt.strftime('%Y-%m-%d')
+        
+    check_in_table = check_in_patients[['patient_identifier', 'phone_number', 'medication_name', 'status', 'check_in_date', 'check_in_message']].to_dict('records')
 
     # --- Final Data Structure ---
     dashboard_data = {
