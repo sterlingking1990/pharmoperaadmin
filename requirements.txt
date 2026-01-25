@@ -9,3 +9,4 @@ gevent
 gevent-websocket
 gunicorn
 python-dotenv
+openai
