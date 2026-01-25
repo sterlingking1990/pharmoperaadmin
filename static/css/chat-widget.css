@@ -27,10 +27,17 @@
     align-items: center;
     border-bottom: 1px solid #e0e0e0;
 }
-.chat-widget-header span {
-    font-size: 1.2rem;
+.chat-header-logo {
+    height: 28px; /* Adjust as needed */
+    width: 28px; /* Set width for SVG */
     margin-right: 10px;
+    vertical-align: middle;
+    fill: currentColor; /* Inherit color from parent (header) */
 }
+/* .chat-widget-header span { /* Removed as emoji is replaced by image */
+    /* font-size: 1.2rem; */
+    /* margin-right: 10px; */
+/* } */
 
 #chat-toggle-btn {
     background: none;
@@ -130,6 +137,15 @@
     font-size: 1.2rem;
     cursor: pointer;
     transition: background-color 0.2s;
+    display: flex; /* For centering SVG */
+    align-items: center; /* For centering SVG */
+    justify-content: center; /* For centering SVG */
+}
+#chat-submit-btn svg {
+    vertical-align: middle; /* Align icon nicely */
+    fill: currentColor; /* Inherit color from button */
+    width: 1.2rem; /* Match button's font-size for icons */
+    height: 1.2rem;
 }
 #chat-submit-btn:hover {
     background-color: #5849c4;
