@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/filters.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat-widget.css') }}">
 </head>
 <body>
     <!-- Navigation -->
@@ -58,6 +59,25 @@
 
     <!-- Details Modal -->
     {% include 'components/details-modal.html' %}
+
+    <!-- Chat Widget -->
+    <div id="chat-widget-container" class="draggable">
+        <div class="chat-widget-header">
+            <span>🤖</span> PharmOpera AI Assistant
+            <button id="chat-toggle-btn">-</button>
+        </div>
+        <div id="chat-widget-body">
+            <div id="chat-messages">
+                <div class="chat-message bot">
+                    Hi! I'm your AI assistant. Ask me questions about your dashboard data, like "What's the overall adherence rate?".
+                </div>
+            </div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type your question...">
+                <button id="chat-submit-btn">Send</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Hidden data for JavaScript -->
     <script id="dashboard-data" type="application/json">{{ dashboard_data | safe }}</script>

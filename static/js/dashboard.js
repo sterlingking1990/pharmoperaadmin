@@ -80,6 +80,113 @@ class Dashboard {
     }
 }
 
+// Chat Widget Controller
+class ChatWidget {
+    constructor() {
+        this.container = document.getElementById('chat-widget-container');
+        this.header = this.container.querySelector('.chat-widget-header');
+        this.body = document.getElementById('chat-widget-body');
+        this.messages = document.getElementById('chat-messages');
+        this.input = document.getElementById('chat-input');
+        this.submitBtn = document.getElementById('chat-submit-btn');
+        this.toggleBtn = document.getElementById('chat-toggle-btn');
+
+        this.isDragging = false;
+        this.isMinimized = false;
+    }
+
+    init() {
+        this.addEventListeners();
+    }
+
+    addEventListeners() {
+        this.submitBtn.addEventListener('click', () => this.sendMessage());
+        this.input.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') this.sendMessage();
+        });
+
+        this.toggleBtn.addEventListener('click', () => this.toggleMinimize());
+
+        // Dragging logic
+        this.header.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.container.style.transition = 'none'; // Disable transition while dragging
+            let offsetX = e.clientX - this.container.getBoundingClientRect().left;
+            let offsetY = e.clientY - this.container.getBoundingClientRect().top;
+
+            const onMouseMove = (e) => {
+                if (!this.isDragging) return;
+                let newX = e.clientX - offsetX;
+                let newY = e.clientY - offsetY;
+                this.container.style.left = `${newX}px`;
+                this.container.style.top = `${newY}px`;
+            };
+
+            const onMouseUp = () => {
+                this.isDragging = false;
+                this.container.style.transition = 'all 0.3s ease-in-out'; // Re-enable transition
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    toggleMinimize() {
+        this.isMinimized = !this.isMinimized;
+        if (this.isMinimized) {
+            this.body.style.display = 'none';
+            this.toggleBtn.textContent = '+';
+        } else {
+            this.body.style.display = 'flex';
+            this.toggleBtn.textContent = '-';
+        }
+    }
+
+    addMessage(text, type = 'bot') {
+        const messageEl = document.createElement('div');
+        messageEl.className = `chat-message ${type}`;
+        if (type === 'bot' && text === 'loading') {
+            messageEl.classList.add('loading');
+        } else {
+            messageEl.textContent = text;
+        }
+        this.messages.appendChild(messageEl);
+        this.messages.scrollTop = this.messages.scrollHeight;
+        return messageEl;
+    }
+
+    async sendMessage() {
+        const question = this.input.value.trim();
+        if (!question) return;
+
+        this.addMessage(question, 'user');
+        this.input.value = '';
+
+        const loadingIndicator = this.addMessage('loading', 'bot');
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question }),
+            });
+
+            const data = await response.json();
+            loadingIndicator.remove(); // Remove loading indicator
+            this.addMessage(data.answer, 'bot');
+
+        } catch (error) {
+            console.error('Chat API error:', error);
+            loadingIndicator.remove();
+            this.addMessage("Sorry, I'm having trouble connecting to the server.", 'bot');
+        }
+    }
+}
+
+
 // Initialize dashboard when DOM is loaded
 window.addEventListener('DOMContentLoaded', (event) => {
     const initialDashboardData = JSON.parse(document.getElementById('dashboard-data').textContent);
@@ -88,4 +195,8 @@ window.addEventListener('DOMContentLoaded', (event) => {
     
     // Make dashboard globally available
     window.dashboard = dashboard;
+
+    // Initialize the chat widget
+    const chatWidget = new ChatWidget();
+    chatWidget.init();
 });

@@ -8,13 +8,20 @@ load_dotenv()
 
 import pandas as pd
 import gspread
+import requests
 from google.oauth2.service_account import Credentials
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 import json
 from threading import Thread, Event
 import numpy as np
-from datetime import timedelta
+from datetime import timedelta, datetime
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+with open('prescription_schedule_prompt.md', 'r', encoding='utf-8') as f:
+    PRESCRIPTION_SCHEDULE_PROMPT_MD_CONTENT = f.read()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'd6216c369373cf88f08e443b5071575acb4a7d5e1e1c2739e1cd0c313f9fefca')
@@ -36,14 +43,9 @@ thread_stop_event = Event()
 
 def get_google_sheet_data(tab_name):
     try:
-        import json
-
         if os.environ.get("GOOGLE_CREDENTIALS"):
             creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-
-            # 🔴 THIS LINE IS CRITICAL
             creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-
             creds = Credentials.from_service_account_info(
                 creds_dict,
                 scopes=SCOPES
@@ -364,6 +366,251 @@ def filter_data():
     
     return jsonify(dashboard_data)
 
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_dashboard_data",
+            "description": "Get pharmacy dashboard data, such as patient adherence, reminders, and top medications. Can be filtered by a date range.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "object",
+                        "properties": {
+                            "dateRange": {
+                                "type": "string",
+                                "description": "The date range for the data, e.g., '7' for last 7 days, '30' for last 30 days. 'all' for all time.",
+                            },
+                             "medication": {
+                                "type": "string",
+                                "description": "The specific medication to filter by, e.g., 'Amoxicillin'."
+                            }
+                        }
+                    }
+                },
+                "required": ["filters"],
+            },
+        }
+    }
+]
+
+import requests
+
+# --- Helper function for Sending Scheduling Webhook ---
+def send_scheduling_webhook(llm_generated_json):
+    """
+    Sends the LLM-generated optimized JSON payload to the Make.com webhook.
+    """
+    print(f"Sending scheduling webhook with LLM-generated JSON: {llm_generated_json}")
+    
+    webhook_url = os.environ.get('MAKE_WEBHOOK_URL', 'https://hook.eu2.make.com/rjkyoocagsfsrol73ozbq3ypkf7nvsyd')
+    
+    # The LLM generates the JSON exactly as expected by the webhook's 'extracted_json' variable
+    # We just need to wrap it in the 'contact' structure
+    
+    # Safely get patient info from the LLM-generated JSON
+    patient_info = llm_generated_json.get('p', {})
+    patient_identifier = patient_info.get('id', 'Unknown Patient')
+    phone_number = patient_info.get('ph')
+    
+    if not phone_number:
+        return {"status": "error", "message": "Phone number not found in LLM-generated JSON. Cannot send webhook."}
+
+    webhook_payload = [{
+        "contact": {
+            "username": patient_identifier,
+            "name": patient_identifier,
+            "phone": phone_number,
+            "variables": {
+                "extracted_json": json.dumps(llm_generated_json)
+            }
+        }
+    }]
+    
+    try:
+        response = requests.post(webhook_url, json=webhook_payload)
+        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+        print(f"Webhook response: {response.status_code}")
+        return {"status": "success", "message": f"Successfully scheduled reminder for {patient_identifier}."}
+    except requests.exceptions.RequestException as e:
+        print(f"[WEBHOOK ERROR] {e}")
+        return {"status": "error", "message": f"Failed to schedule reminder. Error: {e}"}
+
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat():
+    """API endpoint for the AI chat assistant, now powered by OpenAI."""
+    if 'phone_no' not in session:
+        return jsonify({'answer': 'Error: You must be logged in to use the chat assistant.'}), 401
+
+    phone_no = session.get('phone_no')
+    question = request.json.get('question', '')
+    
+    if not question:
+        return jsonify({'answer': 'I am sorry, but I did not receive a question.'})
+
+    # Universal initialization of conversation_history
+    if 'conversation_history' not in session:
+        session['conversation_history'] = [{"role": "system", "content": "You are a helpful assistant for pharmacy administrators. Today's date is " + datetime.now().strftime("%Y-%m-%d") + ". If you cannot answer a question directly using your available tools and data, please inform the user about this limitation and explain why, offering to provide related information if possible. Do not make up answers or provide irrelevant details."}]
+
+    messages = []
+    
+    # Determine if the intent is scheduling based on keywords
+    scheduling_keywords = ["schedule", "remind", "set up reminder", "loading dose"]
+    is_scheduling_intent = any(keyword in question.lower() for keyword in scheduling_keywords)
+
+    if is_scheduling_intent:
+        # For scheduling, use the comprehensive prompt from the MD file
+        current_date_str = datetime.now().strftime("%Y-%m-%d")
+        current_time_str = datetime.now().strftime("%I:%M %p") # e.g., 03:30 PM
+        
+        formatted_scheduling_prompt = PRESCRIPTION_SCHEDULE_PROMPT_MD_CONTENT.replace(
+            "{{$current_date}}", current_date_str
+        ).replace(
+            "{{$current_time}}", current_time_str
+        )
+        
+        # Append the scheduling system prompt after the general one
+        messages = list(session['conversation_history']) # Start with existing history (including general system message)
+        messages.append({"role": "system", "content": formatted_scheduling_prompt})
+        messages.append({"role": "user", "content": question})
+        
+        # Store this intent to potentially maintain context for follow-ups in complex scheduling
+        session['last_intent'] = 'scheduling'
+    else:
+        # For general queries, use the standard system message and previous conversation history
+        # (conversation_history is already initialized universally)
+        messages = [
+            msg.model_dump() if hasattr(msg, 'model_dump') else msg 
+            for msg in session['conversation_history']
+        ]
+        messages.append({"role": "user", "content": question})
+        session['last_intent'] = 'general' # Mark general intent
+
+
+    # --- DEBUGGING: Print the messages list sent to OpenAI ---
+    print(f"\n[LLM PROMPT DEBUG] Messages sent to OpenAI:\n{json.dumps(messages, indent=2)}\n")
+
+    try:
+        # --- First API Call to OpenAI ---
+        if is_scheduling_intent:
+            # For scheduling, request JSON output
+            llm_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                temperature=0.2,
+                messages=messages,
+                response_format={"type": "json_object"}
+            )
+            # The LLM's response content should be the JSON string
+            llm_json_string = llm_response.choices[0].message.content
+            
+            # --- DEBUGGING: Print LLM's raw JSON output ---
+            print(f"\n[LLM GENERATED JSON DEBUG]:\n{llm_json_string}\n")
+            
+            try:
+                parsed_llm_json = json.loads(llm_json_string)
+                
+                # --- Send to Webhook ---
+                webhook_result = send_scheduling_webhook(parsed_llm_json)
+                
+                if webhook_result["status"] == "success":
+                    final_answer = f"✅ Reminder successfully scheduled! {webhook_result['message']}"
+                else:
+                    final_answer = f"❌ Failed to schedule reminder: {webhook_result['message']}"
+                
+                # Append the final assistant response to maintain context
+                session['conversation_history'].append({"role": "assistant", "content": final_answer})
+                return jsonify({'answer': final_answer})
+
+            except json.JSONDecodeError:
+                final_answer = "Sorry, I received an invalid JSON response from the scheduling logic. Please try again."
+                print(f"[LLM JSON ERROR] Invalid JSON: {llm_json_string}")
+                return jsonify({'answer': final_answer}), 500
+
+        else: # General query intent
+            # For general queries, use tools
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools, 
+            )
+            response_message = response.choices[0].message
+            tool_calls = response_message.tool_calls
+            
+            # --- DEBUGGING: Print raw tool_calls from OpenAI ---
+            print(f"\n[LLM TOOL CALLS DEBUG] Raw tool_calls from OpenAI: {tool_calls}\n")
+
+            # --- Step 2: Check if the model wants to call a tool ---
+            if tool_calls:
+                # Load Google Sheet data once if tool calls are detected
+                df_for_tools = get_google_sheet_data(REMINDER_TAB)
+                
+                # Append the assistant's response with tool_calls (converted to dict)
+                session['conversation_history'].append(response_message.model_dump()) 
+                
+                # --- Step 3: Execute the tool and get its result ---
+                available_functions = {
+                    "get_dashboard_data": get_dashboard_data,
+                }
+                
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    function_to_call = available_functions[function_name]
+                    function_args = json.loads(tool_call.function.arguments)
+                    
+                    # Special handling for get_dashboard_data which needs the df
+                    if function_name == "get_dashboard_data":
+                        function_response = function_to_call(
+                            phone_no=phone_no,
+                            df=df_for_tools,
+                            filters=function_args.get("filters")
+                        )
+                    else: # This else case should ideally not be reached with only get_dashboard_data tool
+                        function_response = "Error: Unknown tool."
+                    
+                    # --- Step 4: Send the tool's result back to the model ---
+                    session['conversation_history'].append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": json.dumps(function_response, default=str),
+                        }
+                    )
+                
+                # --- Second API Call to OpenAI ---
+                # Add a system message to instruct the LLM to summarize the tool output
+                session['conversation_history'].append(
+                    {"role": "system", "content": "The previous tool call returned data. Please summarize this information concisely and clearly for the user in a human-readable format. Extract key facts like adherence rate, total patients, and pending reminders without simply re-listing all raw data."}
+                )
+                # This call sends the tool's response back to the model so it can generate a final, human-readable answer.
+                second_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=session['conversation_history'],
+                )
+                final_answer = second_response.choices[0].message.content
+                # Append the final assistant response (converted to dict)
+                session['conversation_history'].append(second_response.choices[0].message.model_dump())
+                return jsonify({'answer': final_answer})
+
+            # If no tool was called, just return the model's direct answer
+            else:
+                answer = response_message.content
+                # Append the assistant's direct response (converted to dict)
+                session['conversation_history'].append(response_message.model_dump())
+                return jsonify({'answer': answer})
+
+    except Exception as e:
+        print(f"[OPENAI API ERROR] {repr(e)}")
+        error_message = f"Sorry, an error occurred with the AI model: {e}"
+        # Append the error message to conversation history to maintain context
+        if 'conversation_history' in session:
+            session['conversation_history'].append({"role": "assistant", "content": error_message})
+        return jsonify({'answer': error_message}), 500
+
+
 @app.route('/api/details')
 def get_details():
     """API endpoint to get detailed data for drill-downs."""
@@ -639,7 +886,7 @@ def logout():
 def on_connect(auth=None):
     if 'phone_no' in session:
         phone_no = session.get('phone_no')
-        socketio.join_room(phone_no)
+        join_room(phone_no)
         print(f"Client connected and joined room: {phone_no}")
         global thread
         if not thread.is_alive():
@@ -668,8 +915,19 @@ def handle_filters(data):
     emit('filtered_data', {'data': json.dumps(dashboard_data, default=str)})
 
 if __name__ == '__main__':
+    from mcp_server import app as mcp_app
+    import threading
+
+    def run_mcp_server():
+        mcp_app.run(host='0.0.0.0', port=5001)
+
+    # Start the MCP server in a separate thread
+    mcp_thread = threading.Thread(target=run_mcp_server)
+    mcp_thread.daemon = True
+    mcp_thread.start()
+
     print("Starting PharmOpera Admin server...")
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, allow_unsafe_werkzeug=False)
 
 # Export for Vercel
 handler = app
