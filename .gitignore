@@ -6,7 +6,6 @@ __pycache__/
 *.pyc
 
 # Environment variables
-.env
 .venv
 venv/
 env/
@@ -16,3 +15,9 @@ env/
 fly.toml
 prescription_scheduling_prompt.md
 update_prompt.txt
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
+config.bat
+node_modules
