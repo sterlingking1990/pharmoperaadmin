@@ -927,7 +927,7 @@ if __name__ == '__main__':
     mcp_thread.start()
 
     print("Starting PharmOpera Admin server...")
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, allow_unsafe_werkzeug=False)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, allow_unsafe_werkzeug=True)
 
 # Export for Vercel
 handler = app
